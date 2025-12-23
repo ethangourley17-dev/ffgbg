@@ -1,0 +1,7 @@
+{
+  "name": "KeywordPulse & Studio AI",
+  "description": "A dual-purpose professional suite offering real-time Google search keyword insights with location-specific data and a powerful AI image editor powered by Gemini 2.5 Flash Image.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
