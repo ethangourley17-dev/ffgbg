@@ -5,8 +5,8 @@ import { KeywordData, Timeframe } from "../types";
 const API_KEY = process.env.API_KEY || "";
 
 /**
- * Uses gemini-3-flash-preview with googleSearch tool for up-to-date SEO data.
- * This satisfies the "Search Grounding" and "Google Search data" requirements.
+ * Uses gemini-3-flash-preview with googleSearch tool for professional SEO data.
+ * Enhanced with strict system instructions for volume scaling.
  */
 export const analyzeKeyword = async (
   keyword: string,
@@ -15,29 +15,34 @@ export const analyzeKeyword = async (
 ): Promise<KeywordData> => {
   const ai = new GoogleGenAI({ apiKey: API_KEY });
   
-  const prompt = `Act as an expert SEO analyst. 
-  Your primary task is to find and extract the real Google search keyword volume and trend data for "${keyword}" in "${location}".
-  Use the Google Search tool to browse recent 2024-2025 metrics.
-  
-  The response MUST be a valid JSON object:
-  {
-    "volume": number,
-    "trend": [{"date": string, "value": number}],
-    "competition": "Low" | "Medium" | "High",
-    "analysis": string
-  }`;
-
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: prompt,
+    contents: `Analyze the keyword: "${keyword}" for the location: "${location}". 
+    The user specifically requested data on a ${timeframe} scale. 
+    Calculate the precise numerical volume using search-grounded metrics.`,
     config: {
+      systemInstruction: `You are a professional SEO Data Engine.
+      Your goal is to provide EXACT keyword volume metrics.
+      
+      STEP 1: Use Google Search to find "Monthly Search Volume" (MSV) for the keyword in the specified location.
+      STEP 2: Apply the following SCALING RULES based on the requested timeframe:
+      - If 'daily': Divide MSV by 30. Output this as "volume".
+      - If 'weekly': Divide MSV by 4.3. Output this as "volume".
+      - If 'monthly': Use MSV directly. Output this as "volume".
+      
+      STEP 3: Generate 7 "trend" data points. 
+      CRITICAL: The values in the "trend" array MUST be on the same scale as your calculated "volume". 
+      If daily volume is 50, trend values must be around 50 (e.g. 45, 52, 48), NOT 1,500.
+      
+      STEP 4: Respond ONLY in JSON.`,
       tools: [{ googleSearch: {} }],
+      thinkingConfig: { thinkingBudget: 8000 },
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          volume: { type: Type.NUMBER },
-          competition: { type: Type.STRING },
+          volume: { type: Type.NUMBER, description: "The calculated volume for the specific interval." },
+          competition: { type: Type.STRING, enum: ["Low", "Medium", "High"] },
           analysis: { type: Type.STRING },
           trend: {
             type: Type.ARRAY,
@@ -61,7 +66,7 @@ export const analyzeKeyword = async (
   try {
     parsed = JSON.parse(rawText);
   } catch (e) {
-    throw new Error("The search grounding service returned an unexpected format. Please try again.");
+    throw new Error("Data synthesis failed. The model could not find reliable search metrics for this query.");
   }
   
   const sources: { uri: string; title: string }[] = [];
@@ -82,40 +87,29 @@ export const analyzeKeyword = async (
   };
 };
 
-/**
- * Uses gemini-3-pro-preview for high-quality conversational chat with history.
- * Satisfies the "AI powered chatbot" requirement.
- */
 export const getChatResponse = async (history: { role: string; parts: { text: string }[] }[], message: string) => {
   const ai = new GoogleGenAI({ apiKey: API_KEY });
   const chat = ai.chats.create({
     model: 'gemini-3-pro-preview',
     config: {
-      systemInstruction: "You are a senior digital marketing strategist. Provide actionable, high-level advice on SEO, PPC, and brand positioning. Keep responses concise but insightful.",
+      systemInstruction: "You are a senior digital marketing strategist. Provide actionable advice based on search data.",
     },
-    history: history // Pass history to maintain conversation context
+    history: history
   });
   
   const response = await chat.sendMessage({ message });
   return response.text;
 };
 
-/**
- * Uses gemini-flash-lite-latest for ultra-low latency tasks.
- * Satisfies the "Fast AI responses" requirement.
- */
 export const getQuickSEOTips = async (keyword: string) => {
   const ai = new GoogleGenAI({ apiKey: API_KEY });
   const response = await ai.models.generateContent({
     model: 'gemini-flash-lite-latest',
-    contents: `Give me 3 extremely brief, punchy SEO tips for the keyword "${keyword}". Focus on high impact.`,
+    contents: `Give me 3 punchy SEO tips for "${keyword}".`,
   });
   return response.text;
 };
 
-/**
- * Uses gemini-2.5-flash-image for rapid brand asset editing.
- */
 export const editImageWithAI = async (
   base64Image: string,
   prompt: string
@@ -140,6 +134,5 @@ export const editImageWithAI = async (
       break;
     }
   }
-  if (!resultUrl) throw new Error("AI failed to modify the image.");
   return resultUrl;
 };
